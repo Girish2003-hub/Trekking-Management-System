@@ -1,0 +1,93 @@
+{% extends 'base.html' %} {% block title %}Login{% endblock %} {% block content
+%}
+<div class="home-hero" id="homeSlideshow">
+  {% if trek_images %} {% for image_path in trek_images %}
+  <img
+    src="{{ url_for('static', filename=image_path) }}"
+    alt="Trek image {{ loop.index }}"
+    class="home-slide {% if loop.first %}active{% endif %}"
+    loading="eager"
+  />
+  {% endfor %} {% else %}
+  <div class="home-slide active home-slide-fallback"></div>
+  {% endif %}
+
+  <div class="home-hero-overlay"></div>
+
+  <div class="home-hero-content auth-hero-content">
+    <div class="auth-panel">
+      <h3 class="mb-3">Login</h3>
+      <form method="post">
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" required />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input
+            type="password"
+            name="password"
+            class="form-control"
+            required
+          />
+        </div>
+        <button class="btn btn-auth-primary w-100">Login</button>
+      </form>
+      <a
+        href="{{ url_for('auth.register') }}"
+        class="btn btn-auth-secondary w-100 mt-2"
+        >Create New Account</a
+      >
+    </div>
+  </div>
+
+  {% if trek_images and trek_images|length > 1 %}
+  <button type="button" class="home-slide-btn prev" data-dir="prev">
+    &#10094;
+  </button>
+  <button type="button" class="home-slide-btn next" data-dir="next">
+    &#10095;
+  </button>
+  {% endif %}
+</div>
+
+{% if trek_images and trek_images|length > 1 %}
+<script>
+  (function () {
+    var root = document.getElementById('homeSlideshow');
+    if (!root) return;
+
+    var slides = root.querySelectorAll('.home-slide');
+    var index = 0;
+    var intervalMs = 3500;
+    var timerId;
+
+    function show(newIndex) {
+      slides[index].classList.remove('active');
+      index = (newIndex + slides.length) % slides.length;
+      slides[index].classList.add('active');
+    }
+
+    function startAuto() {
+      timerId = setInterval(function () {
+        show(index + 1);
+      }, intervalMs);
+    }
+
+    function restartAuto() {
+      clearInterval(timerId);
+      startAuto();
+    }
+
+    root.querySelectorAll('.home-slide-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var dir = btn.getAttribute('data-dir');
+        show(dir === 'prev' ? index - 1 : index + 1);
+        restartAuto();
+      });
+    });
+
+    startAuto();
+  })();
+</script>
+{% endif %} {% endblock %}

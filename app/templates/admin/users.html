@@ -1,0 +1,55 @@
+{% extends 'base.html' %} {% block title %}Users & Staff{% endblock %} {% block
+content %}
+<h3>Users and Staff</h3>
+<table class="table table-bordered table-striped">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Name</th>
+      <th>Email</th>
+      <th>Role</th>
+      <th>Approved</th>
+      <th>Deactivated</th>
+      <th>Blacklisted</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for user in users %}
+    <tr>
+      <td>{{ user.id }}</td>
+      <td>{{ user.name }}</td>
+      <td>{{ user.email }}</td>
+      <td>{{ user.role }}</td>
+      <td>{{ 'Yes' if user.is_approved else 'No' }}</td>
+      <td>{{ 'No' if user.is_approved else 'Yes' }}</td>
+      <td>{{ 'Yes' if user.is_blacklisted else 'No' }}</td>
+      <td>
+        {% if user.role != 'admin' %}
+        <div class="d-flex gap-2">
+          <form
+            method="post"
+            action="{{ url_for('admin.toggle_blacklist', user_id=user.id) }}"
+          >
+            <button class="btn btn-sm btn-outline-danger">
+              Toggle Blacklist
+            </button>
+          </form>
+          <form
+            method="post"
+            action="{{ url_for('admin.toggle_deactivate', user_id=user.id) }}"
+          >
+            <button
+              class="btn btn-sm {% if user.is_approved %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+            >
+              {% if user.is_approved %}Deactivate{% else %}Activate{% endif %}
+            </button>
+          </form>
+        </div>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

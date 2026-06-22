@@ -1,0 +1,40 @@
+{% extends 'base.html' %} {% block title %}Booking History{% endblock %} {%
+block content %}
+<h3>My Booking History</h3>
+<table class="table table-bordered table-striped">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Trek</th>
+      <th>Booking Date</th>
+      <th>Status</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in records %}
+    <tr>
+      <td>{{ row.id }}</td>
+      <td>{{ row.trek.name }}</td>
+      <td>{{ row.booking_date }}</td>
+      <td>{{ row.status }}</td>
+      <td>
+        {% if row.status == 'booked' %}
+        <form
+          method="post"
+          action="{{ url_for('user.cancel_booking', booking_id=row.id) }}"
+          class="d-inline"
+        >
+          <button class="btn btn-sm btn-outline-danger">Cancel</button>
+        </form>
+        {% else %} - {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="5">No history available.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
