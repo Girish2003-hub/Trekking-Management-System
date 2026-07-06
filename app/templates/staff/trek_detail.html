@@ -6,12 +6,14 @@ content %}
     <div class="col-md-6">
       <label class="form-label">Status</label>
       <select name="status" class="form-select">
-        {% for s in ['started','completed'] %}
+        {% for s in ['open', 'closed', 'started', 'completed'] %}
         <option
           value="{{ s }}"
           {%
           if
-          trek.status|lower =="s"
+          trek.status|lower
+          in
+          [s]
           %}selected{%
           endif
           %}
@@ -53,12 +55,14 @@ content %}
       class="d-flex gap-2"
     >
       <select name="booking_status" class="form-select form-select-sm">
-        {% for s in ['booked','cancelled','completed'] %}
+        {% for s in ['booked', 'cancelled', 'completed'] %}
         <option
           value="{{ s }}"
           {%
           if
-          booking.status|lower =="s"
+          booking.status|lower
+          in
+          [s]
           %}selected{%
           endif
           %}

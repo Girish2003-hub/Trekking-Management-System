@@ -1,4 +1,5 @@
 import os
+import re
 
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
@@ -8,6 +9,11 @@ from app.models import User
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+
+EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+NAME_REGEX = re.compile(r"^[A-Za-z][A-Za-z .'-]*$")
+CONTACT_REGEX = re.compile(r"^\+?[0-9\s-]{10,20}$")
 
 
 def _get_trek_images():
@@ -70,6 +76,7 @@ def register():
         email = request.form.get("email", "").strip().lower()
         contact = request.form.get("contact", "").strip()
         password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
 
         if role not in {"user", "staff"}:
             flash("Invalid role selection.", "danger")
@@ -77,6 +84,43 @@ def register():
 
         if not name or not email or not password:
             flash("Name, email and password are required.", "danger")
+            return render_template("auth/register.html", trek_images=trek_images)
+
+        if len(name) < 2 or len(name) > 120 or not NAME_REGEX.match(name):
+            flash("Enter a valid name (2-120 chars, letters/spaces only).", "danger")
+            return render_template("auth/register.html", trek_images=trek_images)
+
+        if len(email) > 255 or not EMAIL_REGEX.match(email):
+            flash("Enter a valid email address.", "danger")
+            return render_template("auth/register.html", trek_images=trek_images)
+
+        if contact:
+            if len(contact) > 50 or not CONTACT_REGEX.match(contact):
+                flash("Enter a valid contact number.", "danger")
+                return render_template("auth/register.html", trek_images=trek_images)
+
+        if len(password) < 8 or len(password) > 128:
+            flash("Password must be 8-128 characters long.", "danger")
+            return render_template("auth/register.html", trek_images=trek_images)
+
+        if not re.search(r"[A-Z]", password):
+            flash("Password must include at least one uppercase letter.", "danger")
+            return render_template("auth/register.html", trek_images=trek_images)
+
+        if not re.search(r"[a-z]", password):
+            flash("Password must include at least one lowercase letter.", "danger")
+            return render_template("auth/register.html", trek_images=trek_images)
+
+        if not re.search(r"\d", password):
+            flash("Password must include at least one number.", "danger")
+            return render_template("auth/register.html", trek_images=trek_images)
+
+        if not re.search(r"[^A-Za-z0-9]", password):
+            flash("Password must include at least one special character.", "danger")
+            return render_template("auth/register.html", trek_images=trek_images)
+
+        if password != confirm_password:
+            flash("Password and confirm password do not match.", "danger")
             return render_template("auth/register.html", trek_images=trek_images)
 
         existing = User.query.filter_by(email=email).first()

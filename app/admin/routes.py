@@ -11,6 +11,33 @@ from app.models import Booking, Trek, User
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
+VALID_DIFFICULTIES = {"Easy", "Moderate", "Hard"}
+VALID_TREK_STATUSES = {"pending", "approved", "open", "closed", "started", "completed"}
+
+
+def _parse_positive_int(raw_value, field_name, minimum=1):
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be a valid number.")
+
+    if value < minimum:
+        raise ValueError(f"{field_name} must be at least {minimum}.")
+
+    return value
+
+
+def _parse_date(raw_value, field_name):
+    try:
+        return datetime.strptime(raw_value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be a valid date.")
+
+
+def _validate_trek_dates(start_date, end_date):
+    if end_date < start_date:
+        raise ValueError("End date cannot be before start date.")
+
 
 @admin_bp.route("/dashboard")
 @login_required
@@ -48,10 +75,23 @@ def create_trek():
         name = request.form.get("name", "").strip()
         location = request.form.get("location", "").strip()
         difficulty = request.form.get("difficulty", "Easy").strip()
-        duration_days = int(request.form.get("duration_days", 1))
-        total_slots = int(request.form.get("total_slots", 1))
-        start_date = datetime.strptime(request.form.get("start_date"), "%Y-%m-%d").date()
-        end_date = datetime.strptime(request.form.get("end_date"), "%Y-%m-%d").date()
+
+        try:
+            if not name:
+                raise ValueError("Trek name is required.")
+            if not location:
+                raise ValueError("Location is required.")
+            if difficulty not in VALID_DIFFICULTIES:
+                raise ValueError("Invalid difficulty selection.")
+
+            duration_days = _parse_positive_int(request.form.get("duration_days", 1), "Duration (days)")
+            total_slots = _parse_positive_int(request.form.get("total_slots", 1), "Total slots")
+            start_date = _parse_date(request.form.get("start_date"), "Start date")
+            end_date = _parse_date(request.form.get("end_date"), "End date")
+            _validate_trek_dates(start_date, end_date)
+        except ValueError as exc:
+            flash(str(exc), "danger")
+            return render_template("admin/trek_form.html", trek=None)
 
         trek = Trek(
             name=name,
@@ -84,22 +124,47 @@ def edit_trek(trek_id):
         return redirect(url_for("admin.treks"))
 
     if request.method == "POST":
-        trek.name = request.form.get("name", "").strip()
-        trek.location = request.form.get("location", "").strip()
-        trek.difficulty = request.form.get("difficulty", "Easy").strip()
-        trek.duration_days = int(request.form.get("duration_days", 1))
+        name = request.form.get("name", "").strip()
+        location = request.form.get("location", "").strip()
+        difficulty = request.form.get("difficulty", "Easy").strip()
+        status = request.form.get("status", trek.status).strip().lower()
 
-        new_total_slots = int(request.form.get("total_slots", trek.total_slots))
+        try:
+            if not name:
+                raise ValueError("Trek name is required.")
+            if not location:
+                raise ValueError("Location is required.")
+            if difficulty not in VALID_DIFFICULTIES:
+                raise ValueError("Invalid difficulty selection.")
+            if status not in VALID_TREK_STATUSES:
+                raise ValueError("Invalid trek status.")
+
+            duration_days = _parse_positive_int(request.form.get("duration_days", 1), "Duration (days)")
+            new_total_slots = _parse_positive_int(
+                request.form.get("total_slots", trek.total_slots),
+                "Total slots",
+            )
+            start_date = _parse_date(request.form.get("start_date"), "Start date")
+            end_date = _parse_date(request.form.get("end_date"), "End date")
+            _validate_trek_dates(start_date, end_date)
+        except ValueError as exc:
+            flash(str(exc), "danger")
+            return render_template("admin/trek_form.html", trek=trek)
+
         booked_count = Booking.query.filter_by(trek_id=trek.id, status="booked").count()
         if new_total_slots < booked_count:
             flash("Total slots cannot be less than current booked users.", "danger")
             return render_template("admin/trek_form.html", trek=trek)
 
+        trek.name = name
+        trek.location = location
+        trek.difficulty = difficulty
+        trek.duration_days = duration_days
         trek.total_slots = new_total_slots
         trek.available_slots = new_total_slots - booked_count
-        trek.status = request.form.get("status", trek.status)
-        trek.start_date = datetime.strptime(request.form.get("start_date"), "%Y-%m-%d").date()
-        trek.end_date = datetime.strptime(request.form.get("end_date"), "%Y-%m-%d").date()
+        trek.status = status
+        trek.start_date = start_date
+        trek.end_date = end_date
 
         if trek.status == "completed":
             Booking.query.filter_by(trek_id=trek.id, status="booked").update({"status": "completed"})
