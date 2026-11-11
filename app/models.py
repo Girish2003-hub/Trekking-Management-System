@@ -56,7 +56,55 @@ class Booking(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     trek_id = db.Column(db.Integer, db.ForeignKey("treks.id"), nullable=False)
     booking_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    # booked / cancelled / completed
     status = db.Column(db.String(20), nullable=False, default="booked")
+    # pending / paid / refunded (simulated payment)
+    payment_status = db.Column(db.String(20), nullable=False, default="pending")
+    participants = db.Column(db.Integer, nullable=False, default=1)
+    cancelled_at = db.Column(db.DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "trek_id": self.trek_id,
+            "trek_name": self.trek.name if self.trek else None,
+            "location": self.trek.location if self.trek else None,
+            "start_date": self.trek.start_date.isoformat() if self.trek else None,
+            "end_date": self.trek.end_date.isoformat() if self.trek else None,
+            "booking_date": self.booking_date.isoformat(),
+            "status": self.status,
+            "payment_status": self.payment_status,
+            "participants": self.participants,
+        }
+
+
+class StaffProfile(db.Model):
+    """Extra details for users whose role is 'staff' (one-to-one with User)."""
+
+    __tablename__ = "staff_profiles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
+    phone = db.Column(db.String(20), nullable=True)
+    experience_years = db.Column(db.Integer, nullable=False, default=0)
+    specialization = db.Column(db.String(120), nullable=True)  # e.g. "High altitude"
+    # active / inactive / blacklisted
+    status = db.Column(db.String(20), nullable=False, default="active")
+
+    user = db.relationship("User", backref=db.backref("staff_profile", uselist=False))
+
+    def to_dict(self):
+        return {
+            "staff_id": self.user_id,
+            "name": self.user.name,
+            "email": self.user.email,
+            "phone": self.phone,
+            "experience_years": self.experience_years,
+            "specialization": self.specialization,
+            "status": self.status,
+            "assigned_treks": [t.name for t in self.user.staff_treks],
+        }
 
 
 @login_manager.user_loader

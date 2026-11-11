@@ -1,69 +1,57 @@
-import os
-
-from flask import Flask, flash, redirect, render_template, url_for
-from flask_login import current_user
+from flask import Flask, abort, jsonify, render_template, request
 
 from config import Config
-from app.extensions import db, login_manager
+from app.extensions import db, init_redis, login_manager
 from app.models import User
 
 
-def _get_trek_images(static_folder):
-    trek_images = []
-    trek_images_dir = os.path.join(static_folder, "images", "treks")
-    if os.path.isdir(trek_images_dir):
-        allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
-        for file_name in sorted(os.listdir(trek_images_dir)):
-            ext = os.path.splitext(file_name)[1].lower()
-            if ext in allowed_extensions:
-                trek_images.append(f"images/treks/{file_name}")
-    return trek_images
-
-
 def create_app():
+    # Jinja is only used for the single Vue entry page (templates/index.html).
     app = Flask(__name__)
     app.config.from_object(Config)
 
     db.init_app(app)
     login_manager.init_app(app)
+    init_redis(app.config["REDIS_URL"])
 
-    from app.auth.routes import auth_bp
-    from app.admin.routes import admin_bp
-    from app.staff.routes import staff_bp
-    from app.user.routes import user_bp
+    # ---- JSON API (Vue talks only to these) ----
+    from app.api import api_bp
 
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(admin_bp)
-    app.register_blueprint(staff_bp)
-    app.register_blueprint(user_bp)
+    app.register_blueprint(api_bp)
 
+    # ---- Vue entry point ----
+    # Vue Router uses HTML5 history mode, so a refresh on /admin/treks must also
+    # return index.html; the catch-all route below handles that.
     @app.route("/")
-    def home():
-        if current_user.is_authenticated:
-            if current_user.role == "admin":
-                return redirect(url_for("admin.dashboard"))
-            if current_user.role == "staff":
-                return redirect(url_for("staff.dashboard"))
-            return redirect(url_for("user.dashboard"))
+    @app.route("/<path:_any>")
+    def home(_any=None):
+        if _any and _any.startswith(("api/", "static/")):
+            abort(404)
+        return render_template("index.html")
 
-        trek_images = _get_trek_images(app.static_folder)
-
-        return render_template("shared/index.html", trek_images=trek_images)
-
-    @app.route("/about")
-    def about():
-        trek_images = _get_trek_images(app.static_folder)
-        return render_template("shared/about.html", trek_images=trek_images)
+    # ---- Errors: JSON for /api/*, Vue page for everything else ----
+    def _wants_json():
+        return request.path.startswith("/api/")
 
     @app.errorhandler(401)
     def unauthorized(_error):
-        flash("Please log in first.", "warning")
-        return redirect(url_for("auth.login"))
+        if _wants_json():
+            return jsonify({"message": "Login required"}), 401
+        return render_template("index.html"), 401
 
     @app.errorhandler(403)
     def forbidden(_error):
-        return render_template("shared/forbidden.html"), 403
+        if _wants_json():
+            return jsonify({"message": "You are not allowed to do this"}), 403
+        return render_template("index.html"), 403
 
+    @app.errorhandler(404)
+    def not_found(_error):
+        if _wants_json():
+            return jsonify({"message": "Not found"}), 404
+        return render_template("index.html"), 404
+
+    # ---- Your existing admin seeding command (unchanged from V1) ----
     @app.cli.command("init-db")
     def init_db_command():
         db.create_all()
