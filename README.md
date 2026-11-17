@@ -71,6 +71,8 @@ app/
 
 ## API endpoints
 
+Full OpenAPI 3.0 definition: `api.yaml` (open it in https://editor.swagger.io to browse).
+
 | Method | Path | Role | Purpose |
 |---|---|---|---|
 | GET | /api/health | any | Flask + Redis status |

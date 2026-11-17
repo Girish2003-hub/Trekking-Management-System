@@ -1,0 +1,612 @@
+openapi: 3.0.3
+info:
+  title: Trekking Management Application API
+  version: "2.0"
+  description: |
+    JSON API used by the VueJS frontend. Authentication is session based
+    (Flask-Login cookie). Every error response has the shape {"message": "..."}.
+    401 = not logged in, 403 = wrong role / blocked, 404 = not found,
+    409 = conflict (duplicate, not enough slots).
+servers:
+  - url: http://127.0.0.1:5000/api
+tags:
+  - name: Auth
+  - name: Treks
+  - name: User
+  - name: Staff
+  - name: Admin
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+  schemas:
+    Message:
+      type: object
+      properties:
+        message: {type: string}
+    User:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        email: {type: string, format: email}
+        role: {type: string, enum: [admin, staff, user]}
+        contact: {type: string, nullable: true}
+        is_active: {type: boolean}
+        is_blacklisted: {type: boolean}
+        created_at: {type: string, format: date-time}
+    Trek:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        location: {type: string}
+        difficulty: {type: string, enum: [easy, moderate, hard]}
+        duration_days: {type: integer}
+        total_slots: {type: integer}
+        available_slots: {type: integer}
+        status: {type: string, enum: [pending, approved, open, closed, ongoing, completed]}
+        start_date: {type: string, format: date}
+        end_date: {type: string, format: date}
+        assigned_staff_id: {type: integer, nullable: true}
+        assigned_staff_name: {type: string, nullable: true}
+        booked_count: {type: integer, description: Only in staff views}
+    TrekInput:
+      type: object
+      required: [name, location, difficulty, start_date, end_date, total_slots]
+      properties:
+        name: {type: string, minLength: 3, maxLength: 120}
+        location: {type: string, minLength: 2, maxLength: 120}
+        difficulty: {type: string, enum: [easy, moderate, hard]}
+        start_date: {type: string, format: date}
+        end_date: {type: string, format: date}
+        total_slots: {type: integer, minimum: 1}
+    Booking:
+      type: object
+      properties:
+        id: {type: integer}
+        user_id: {type: integer}
+        trek_id: {type: integer}
+        trek_name: {type: string}
+        location: {type: string}
+        start_date: {type: string, format: date}
+        end_date: {type: string, format: date}
+        booking_date: {type: string, format: date-time}
+        status: {type: string, enum: [booked, cancelled, completed]}
+        payment_status: {type: string, enum: [pending, paid, refunded]}
+        participants: {type: integer}
+    Staff:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            phone: {type: string, nullable: true}
+            experience_years: {type: integer}
+            specialization: {type: string, nullable: true}
+            assigned_treks:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: {type: integer}
+                  name: {type: string}
+                  status: {type: string}
+  responses:
+    Error:
+      description: Error with a message
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Message'}
+  parameters:
+    TrekId:
+      name: trek_id
+      in: path
+      required: true
+      schema: {type: integer}
+    BookingId:
+      name: booking_id
+      in: path
+      required: true
+      schema: {type: integer}
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema: {type: integer}
+
+security:
+  - sessionCookie: []
+
+paths:
+  /health:
+    get:
+      tags: [Treks]
+      summary: Flask and Redis status
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string}
+                  redis: {type: boolean}
+
+  # ------------------------------------------------------------------ Auth
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a trekker account (staff and admin cannot register)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: {type: string}
+                email: {type: string, format: email}
+                contact: {type: string}
+                password: {type: string, minLength: 8, description: "Upper, lower, digit and special character"}
+      responses:
+        "201":
+          description: Registered and logged in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: {type: string}
+                  user: {$ref: '#/components/schemas/User'}
+        "400": {$ref: '#/components/responses/Error'}
+        "409": {$ref: '#/components/responses/Error'}
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in (admin, staff or user)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: {type: string}
+                password: {type: string}
+      responses:
+        "200":
+          description: Logged in; session cookie set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: '#/components/schemas/User'}
+        "401": {$ref: '#/components/responses/Error'}
+        "403":
+          description: Account blacklisted or deactivated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Message'}
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out
+      responses:
+        "200": {description: Logged out}
+        "401": {$ref: '#/components/responses/Error'}
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Current logged-in user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: '#/components/schemas/User'}
+        "401": {$ref: '#/components/responses/Error'}
+
+  # ------------------------------------------------------------------ Treks (public)
+  /treks:
+    get:
+      tags: [Treks]
+      summary: Search and filter approved/open treks (Redis cached, 5 min expiry)
+      security: []
+      parameters:
+        - {name: q, in: query, schema: {type: string}, description: Name or location contains}
+        - {name: difficulty, in: query, schema: {type: string, enum: [easy, moderate, hard]}}
+        - {name: location, in: query, schema: {type: string}}
+        - {name: min_days, in: query, schema: {type: integer}}
+        - {name: max_days, in: query, schema: {type: integer}}
+        - {name: status, in: query, schema: {type: string, enum: [approved, open]}}
+      responses:
+        "200":
+          description: Matching treks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  treks: {type: array, items: {$ref: '#/components/schemas/Trek'}}
+                  cached: {type: boolean}
+  /treks/{trek_id}:
+    get:
+      tags: [Treks]
+      summary: One approved/open trek (cached)
+      security: []
+      parameters: [{$ref: '#/components/parameters/TrekId'}]
+      responses:
+        "200":
+          description: Trek
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trek: {$ref: '#/components/schemas/Trek'}
+                  cached: {type: boolean}
+        "404": {$ref: '#/components/responses/Error'}
+
+  # ------------------------------------------------------------------ User
+  /bookings:
+    get:
+      tags: [User]
+      summary: Logged-in user's full trekking history
+      parameters:
+        - {name: status, in: query, schema: {type: string, enum: [booked, cancelled, completed]}}
+      responses:
+        "200":
+          description: Bookings, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bookings: {type: array, items: {$ref: '#/components/schemas/Booking'}}
+    post:
+      tags: [User]
+      summary: Book a trek (Open only, no duplicates, no overbooking)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [trek_id]
+              properties:
+                trek_id: {type: integer}
+                participants: {type: integer, minimum: 1, maximum: 10, default: 1}
+      responses:
+        "201":
+          description: Booked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: {type: string}
+                  booking: {$ref: '#/components/schemas/Booking'}
+        "400": {$ref: '#/components/responses/Error'}
+        "403": {$ref: '#/components/responses/Error'}
+        "404": {$ref: '#/components/responses/Error'}
+        "409": {$ref: '#/components/responses/Error'}
+  /bookings/{booking_id}/cancel:
+    patch:
+      tags: [User]
+      summary: Cancel own booking; slots returned, paid becomes refunded
+      parameters: [{$ref: '#/components/parameters/BookingId'}]
+      responses:
+        "200": {description: Cancelled}
+        "400": {$ref: '#/components/responses/Error'}
+        "404": {$ref: '#/components/responses/Error'}
+  /bookings/{booking_id}/pay:
+    post:
+      tags: [User]
+      summary: Simulated payment
+      parameters: [{$ref: '#/components/parameters/BookingId'}]
+      responses:
+        "200": {description: Paid}
+        "400": {$ref: '#/components/responses/Error'}
+        "404": {$ref: '#/components/responses/Error'}
+  /user/dashboard:
+    get:
+      tags: [User]
+      summary: Booking counts, upcoming bookings, available treks
+      responses:
+        "200": {description: Dashboard data}
+  /user/profile:
+    get:
+      tags: [User]
+      summary: Own profile (any role)
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: '#/components/schemas/User'}
+    put:
+      tags: [User]
+      summary: Update name and contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string, minLength: 2, maxLength: 120}
+                contact: {type: string}
+      responses:
+        "200": {description: Updated}
+        "400": {$ref: '#/components/responses/Error'}
+  /user/export:
+    post:
+      tags: [User]
+      summary: Queue a Celery job that exports booking history as CSV and emails an alert when done
+      responses:
+        "202": {description: Export queued}
+        "503": {$ref: '#/components/responses/Error'}
+
+  # ------------------------------------------------------------------ Staff
+  /staff/dashboard:
+    get:
+      tags: [Staff]
+      summary: Assigned treks with registered participants per trek
+      responses:
+        "200":
+          description: Treks and counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  treks: {type: array, items: {$ref: '#/components/schemas/Trek'}}
+                  counts: {type: object}
+  /staff/treks/{trek_id}:
+    get:
+      tags: [Staff]
+      summary: Assigned trek with participant list
+      parameters: [{$ref: '#/components/parameters/TrekId'}]
+      responses:
+        "200": {description: "Trek, participants and allowed status changes"}
+        "403": {$ref: '#/components/responses/Error'}
+        "404": {$ref: '#/components/responses/Error'}
+    patch:
+      tags: [Staff]
+      summary: Update total slots and/or status (assigned staff only)
+      parameters: [{$ref: '#/components/parameters/TrekId'}]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                total_slots: {type: integer, minimum: 1}
+                status: {type: string, enum: [open, closed, ongoing, completed]}
+      responses:
+        "200": {description: Updated}
+        "400": {$ref: '#/components/responses/Error'}
+        "403": {$ref: '#/components/responses/Error'}
+  /staff/treks/{trek_id}/start:
+    post:
+      tags: [Staff]
+      summary: Mark trek as started (ongoing)
+      parameters: [{$ref: '#/components/parameters/TrekId'}]
+      responses:
+        "200": {description: Started}
+        "400": {$ref: '#/components/responses/Error'}
+        "403": {$ref: '#/components/responses/Error'}
+  /staff/treks/{trek_id}/complete:
+    post:
+      tags: [Staff]
+      summary: Mark trek as completed; its bookings become completed
+      parameters: [{$ref: '#/components/parameters/TrekId'}]
+      responses:
+        "200": {description: Completed}
+        "400": {$ref: '#/components/responses/Error'}
+        "403": {$ref: '#/components/responses/Error'}
+  /staff/bookings/{booking_id}:
+    patch:
+      tags: [Staff]
+      summary: Remove or restore a participant
+      parameters: [{$ref: '#/components/parameters/BookingId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: {type: string, enum: [cancelled, booked]}
+      responses:
+        "200": {description: Updated}
+        "400": {$ref: '#/components/responses/Error'}
+        "403": {$ref: '#/components/responses/Error'}
+        "409": {$ref: '#/components/responses/Error'}
+
+  # ------------------------------------------------------------------ Admin
+  /admin/stats:
+    get:
+      tags: [Admin]
+      summary: Dashboard counts and chart data
+      responses:
+        "200": {description: Counts and charts}
+  /admin/treks:
+    get:
+      tags: [Admin]
+      summary: All treks including history
+      parameters:
+        - {name: q, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string}}
+        - {name: difficulty, in: query, schema: {type: string}}
+      responses:
+        "200": {description: Treks}
+    post:
+      tags: [Admin]
+      summary: Create trek (starts as pending)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TrekInput'}
+      responses:
+        "201": {description: Created}
+        "400": {$ref: '#/components/responses/Error'}
+        "409": {$ref: '#/components/responses/Error'}
+  /admin/treks/{trek_id}:
+    put:
+      tags: [Admin]
+      summary: Edit trek (not allowed once completed)
+      parameters: [{$ref: '#/components/parameters/TrekId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TrekInput'}
+      responses:
+        "200": {description: Updated}
+        "400": {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [Admin]
+      summary: Delete trek (refused if it has bookings, to keep history)
+      parameters: [{$ref: '#/components/parameters/TrekId'}]
+      responses:
+        "200": {description: Deleted}
+        "409": {$ref: '#/components/responses/Error'}
+  /admin/treks/{trek_id}/status:
+    patch:
+      tags: [Admin]
+      summary: Set any status, e.g. approve a pending trek (open needs assigned staff)
+      parameters: [{$ref: '#/components/parameters/TrekId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: {type: string, enum: [pending, approved, open, closed, ongoing, completed]}
+      responses:
+        "200": {description: Updated}
+        "400": {$ref: '#/components/responses/Error'}
+  /admin/treks/{trek_id}/assign:
+    put:
+      tags: [Admin]
+      summary: Assign or unassign staff
+      parameters: [{$ref: '#/components/parameters/TrekId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                staff_id: {type: integer, nullable: true}
+      responses:
+        "200": {description: Saved}
+        "400": {$ref: '#/components/responses/Error'}
+        "404": {$ref: '#/components/responses/Error'}
+  /admin/staff:
+    get:
+      tags: [Admin]
+      summary: List staff
+      parameters: [{name: q, in: query, schema: {type: string}}]
+      responses:
+        "200":
+          description: Staff
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  staff: {type: array, items: {$ref: '#/components/schemas/Staff'}}
+    post:
+      tags: [Admin]
+      summary: Create a staff account (only way staff can exist)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: {type: string}
+                email: {type: string, format: email}
+                password: {type: string, minLength: 6}
+                contact: {type: string}
+                phone: {type: string}
+                experience_years: {type: integer}
+                specialization: {type: string}
+      responses:
+        "201": {description: Created}
+        "400": {$ref: '#/components/responses/Error'}
+        "409": {$ref: '#/components/responses/Error'}
+  /admin/staff/{user_id}:
+    put:
+      tags: [Admin]
+      summary: Edit staff profile
+      parameters: [{$ref: '#/components/parameters/UserId'}]
+      responses:
+        "200": {description: Updated}
+        "404": {$ref: '#/components/responses/Error'}
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List trekkers with booking counts
+      parameters: [{name: q, in: query, schema: {type: string}}]
+      responses:
+        "200": {description: Users}
+  /admin/accounts/{user_id}:
+    patch:
+      tags: [Admin]
+      summary: Activate, deactivate, blacklist or unblacklist a user or staff member
+      parameters: [{$ref: '#/components/parameters/UserId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: {type: string, enum: [activate, deactivate, blacklist, unblacklist]}
+      responses:
+        "200": {description: Updated}
+        "400": {$ref: '#/components/responses/Error'}
+        "404": {$ref: '#/components/responses/Error'}
+  /admin/bookings:
+    get:
+      tags: [Admin]
+      summary: Every booking ever made
+      parameters:
+        - {name: status, in: query, schema: {type: string}}
+        - {name: trek_id, in: query, schema: {type: integer}}
+      responses:
+        "200": {description: Bookings}
+  /admin/search:
+    get:
+      tags: [Admin]
+      summary: Search users, staff and treks
+      parameters:
+        - {name: q, in: query, required: true, schema: {type: string}}
+        - {name: type, in: query, schema: {type: string, enum: [all, users, staff, treks]}}
+      responses:
+        "200": {description: Results grouped by type}
+        "400": {$ref: '#/components/responses/Error'}
