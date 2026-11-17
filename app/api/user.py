@@ -1,7 +1,7 @@
 """Trekker endpoints: book, cancel, pay (simulated), history, dashboard, profile."""
 from datetime import date, datetime
 
-from flask import jsonify, request
+from flask import current_app, jsonify, request
 from flask_login import current_user
 
 from app.api import api_bp
@@ -157,3 +157,19 @@ def update_profile():
     current_user.contact = contact or None
     db.session.commit()
     return jsonify({"message": "Profile updated", "user": user_json(current_user)})
+
+
+@api_bp.post("/user/export")
+@role_required("user")
+def export_booking_history():
+    from kombu.exceptions import OperationalError
+
+    from app.tasks import export_bookings_csv
+
+    try:
+        export_bookings_csv.delay(current_user.id)
+    except OperationalError:
+        current_app.logger.exception("Could not queue the booking history export")
+        return jsonify({"message": "Export queue is unavailable. Please try again shortly."}), 503
+
+    return jsonify({"message": "CSV export queued. You will receive an email when it is ready."}), 202

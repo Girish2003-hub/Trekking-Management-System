@@ -1,4 +1,5 @@
 from flask import Flask, abort, jsonify, render_template, request
+from sqlalchemy import inspect, text
 
 from config import Config
 from app.extensions import db, init_redis, login_manager
@@ -58,6 +59,7 @@ def create_app():
     @app.cli.command("init-db")
     def init_db_command():
         db.create_all()
+        _migrate_legacy_bookings()
 
         admin = User.query.filter_by(role="admin").first()
         if not admin:
@@ -76,3 +78,21 @@ def create_app():
             print("Database initialized. Admin already exists.")
 
     return app
+
+
+def _migrate_legacy_bookings():
+    """Add fields introduced after the original V1 bookings table."""
+    inspector = inspect(db.engine)
+    if not inspector.has_table("bookings"):
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("bookings")}
+    new_columns = {
+        "payment_status": "VARCHAR(20) NOT NULL DEFAULT 'pending'",
+        "participants": "INTEGER NOT NULL DEFAULT 1",
+        "cancelled_at": "DATETIME",
+    }
+    with db.engine.begin() as connection:
+        for column, definition in new_columns.items():
+            if column not in existing_columns:
+                connection.execute(text(f"ALTER TABLE bookings ADD COLUMN {column} {definition}"))

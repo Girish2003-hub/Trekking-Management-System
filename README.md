@@ -23,8 +23,15 @@ flask --app app.py init-db       # creates tables + the single admin
 flask --app app.py run
 ```
 
-Redis must run on `localhost:6379` (WSL: `sudo service redis-server start`).
-Without Redis the app still works, just uncached.
+Redis must be reachable on port `6379` (WSL: `sudo service redis-server start`). If Windows cannot reach WSL Redis through `localhost`, set `REDIS_HOST` to the current WSL IP in each Flask/Celery terminal:
+
+```powershell
+$env:REDIS_HOST = (wsl.exe -e bash -lc "hostname -I").Trim().Split(' ')[0]
+```
+
+If Redis uses a password, set `REDIS_PASSWORD` before starting Flask and Celery; cache, broker, and result-backend URLs use the configured host and password.
+Without Redis the public catalogue works uncached, but CSV export requests return 503 and scheduled jobs cannot run.
+Mail is sent through the SMTP server in `MAIL_SERVER`/`MAIL_PORT`; for local demos, [MailHog](https://github.com/mailhog/MailHog/releases/latest) can listen on port 1025 with its inbox at `http://localhost:8025`.
 
 Default admin: `admin@trek.local` / `admin123`
 
@@ -32,6 +39,7 @@ Default admin: `admin@trek.local` / `admin123`
 
 ```
 app.py, config.py, requirements.txt
+celery_worker.py   Flask-context Celery app and daily/monthly schedules
 app/
   __init__.py        create_app, Vue entry route, JSON error handlers, init-db
   extensions.py      db, login_manager, redis client
@@ -45,6 +53,8 @@ app/
     user.py          bookings, history, dashboard, profile
     staff.py         assigned treks, slots/status, participants
     admin.py         treks, staff, users, bookings, search, stats
+  mailer.py          SMTP plain-text + HTML email helper
+  tasks.py           CSV export, daily reminders, monthly activity report
   templates/index.html
   static/js/
     main.js          router + role guard
@@ -75,6 +85,7 @@ app/
 | PATCH | /api/bookings/{id}/cancel | user | Cancel, slots returned, refund if paid |
 | POST | /api/bookings/{id}/pay | user | Simulated payment |
 | GET | /api/user/dashboard | user | Counts, upcoming bookings, available treks |
+| POST | /api/user/export | user | Queue booking-history CSV export; completion is emailed |
 | GET/PUT | /api/user/profile | all | View / edit name and contact |
 | GET | /api/staff/dashboard | staff | Assigned treks + registered count per trek |
 | GET | /api/staff/treks/{id} | staff (assigned) | Trek + participant list |
@@ -94,7 +105,18 @@ app/
 | GET | /api/admin/bookings?status=&trek_id= | admin | All bookings |
 | GET | /api/admin/search?q=&type= | admin | Search users, staff, treks |
 
-## Remaining work
+## Background jobs
 
-- **Background jobs** - daily reminders, monthly HTML report to admin, and asynchronous CSV export are not implemented yet.
-- The project brief explicitly restricts AI use for certain components. Review the assignment rules and declare assistance accurately before submission.
+Celery beat sends trek reminders daily at 09:00 and the previous month's activity report on the first day of each month at 09:15 (Asia/Kolkata by default).
+
+Run the API, a Celery worker, and Celery beat in separate terminals after starting Redis and the SMTP service:
+
+```bash
+flask --app app.py run
+celery -A celery_worker.celery worker --loglevel=info --pool=solo
+celery -A celery_worker.celery beat --loglevel=info
+```
+
+On Windows, `--pool=solo` is required for the worker. CSV files are written to `exports/` and are excluded from Git.
+
+The project brief restricts AI use for some components; review the assignment rules and declare assistance accurately before submission.
