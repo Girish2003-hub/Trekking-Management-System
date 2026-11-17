@@ -139,9 +139,11 @@ export const RegisterPage = {
       this.busy = true;
       try {
         const { confirm, ...body } = this.f;
-        await api("/auth/register", { method: "POST", body });
-        store.notify("Account created. Please log in.");
-        this.$router.push("/login");
+        const { user } = await api("/auth/register", { method: "POST", body });
+        store.user = user;
+        store.loaded = true;
+        store.notify("Account created successfully.");
+        this.$router.push(homeFor(user));
       } catch (e) { this.error = e.message; }
       this.busy = false;
     },
@@ -160,9 +162,9 @@ export const RegisterPage = {
             <input v-model.trim="f.contact" type="tel" class="form-control" pattern="\\+?[0-9]{7,15}"
                    title="7-15 digits"></div>
           <div class="mb-3"><label class="form-label">Password</label>
-            <input v-model="f.password" type="password" class="form-control" required minlength="6"></div>
+            <input v-model="f.password" type="password" class="form-control" required minlength="8"></div>
           <div class="mb-3"><label class="form-label">Confirm password</label>
-            <input v-model="f.confirm" type="password" class="form-control" required minlength="6"></div>
+            <input v-model="f.confirm" type="password" class="form-control" required minlength="8"></div>
           <button class="btn btn-success w-100" :disabled="busy">Register</button>
         </form>
       </div></div>

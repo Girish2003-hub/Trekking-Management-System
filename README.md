@@ -64,6 +64,10 @@ app/
 | Method | Path | Role | Purpose |
 |---|---|---|---|
 | GET | /api/health | any | Flask + Redis status |
+| POST | /api/auth/login | public | Log in and return the user |
+| POST | /api/auth/register | public | Register a trekker account |
+| POST | /api/auth/logout | authenticated | Log out |
+| GET | /api/auth/me | any | Return current user or 401 |
 | GET | /api/treks?q=&difficulty=&location=&min_days=&max_days= | any | Search/filter approved & open treks (cached) |
 | GET | /api/treks/{id} | any | Trek detail (cached) |
 | POST | /api/bookings | user | Book (Open only, no duplicates, no overbooking) |
@@ -90,10 +94,7 @@ app/
 | GET | /api/admin/bookings?status=&trek_id= | admin | All bookings |
 | GET | /api/admin/search?q=&type= | admin | Search users, staff, treks |
 
-## Still to be written by the student (AI not permitted by the problem statement)
+## Remaining work
 
-- **Trek model (V2)** - `app/models.py`
-- **Authentication** - `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/logout`, `GET /api/auth/me`
-  (contract in `app/api/__init__.py`; old V1 page-based auth kept in `app/auth/` for reference, not registered)
-- **Celery jobs** - daily reminders, monthly HTML report to admin, `POST /api/user/export` CSV export
-  (the dashboard's "Export history (CSV)" button already calls it)
+- **Background jobs** - daily reminders, monthly HTML report to admin, and asynchronous CSV export are not implemented yet.
+- The project brief explicitly restricts AI use for certain components. Review the assignment rules and declare assistance accurately before submission.

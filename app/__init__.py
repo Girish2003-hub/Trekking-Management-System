@@ -18,6 +18,9 @@ def create_app():
     from app.api import api_bp
 
     app.register_blueprint(api_bp)
+    from app.auth.routes import auth_bp
+
+    app.register_blueprint(auth_bp)
 
     # ---- Vue entry point ----
     # Vue Router uses HTML5 history mode, so a refresh on /admin/treks must also
