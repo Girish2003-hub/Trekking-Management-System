@@ -51,6 +51,7 @@ def export_bookings_csv(user_id):
                 data["end_date"],
             ])
 
+    download_url = f"{current_app.config['APP_BASE_URL'].rstrip('/')}/api/user/exports/{filename}"
     send_email(
         user.email,
         "Your trekking booking history export is ready",
@@ -58,7 +59,8 @@ def export_bookings_csv(user_id):
             f"<html><body><p>Hello {escape(user.name)},</p>"
             f"<p>Your booking history CSV export is ready: "
             f"<strong>{escape(filename)}</strong>.</p>"
-            "<p>The file is available in the application's exports folder.</p>"
+            f"<p><a href=\"{escape(download_url)}\">Download the CSV</a> "
+            "(log in first if the link asks you to).</p>"
             "</body></html>"
         ),
     )

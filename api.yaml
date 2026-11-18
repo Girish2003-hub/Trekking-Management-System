@@ -363,6 +363,28 @@ paths:
       responses:
         "202": {description: Export queued}
         "503": {$ref: '#/components/responses/Error'}
+  /user/exports/latest:
+    get:
+      tags: [User]
+      summary: Download the logged-in user's newest booking-history CSV
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv: {}
+        "404": {$ref: '#/components/responses/Error'}
+  /user/exports/{filename}:
+    get:
+      tags: [User]
+      summary: Download one of the logged-in user's CSV exports (link sent in the email)
+      parameters:
+        - {name: filename, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv: {}
+        "404": {$ref: '#/components/responses/Error'}
 
   # ------------------------------------------------------------------ Staff
   /staff/dashboard:

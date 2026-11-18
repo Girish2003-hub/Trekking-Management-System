@@ -1,7 +1,9 @@
 """Trekker endpoints: book, cancel, pay (simulated), history, dashboard, profile."""
+import os
+import re
 from datetime import date, datetime
 
-from flask import current_app, jsonify, request
+from flask import current_app, jsonify, request, send_from_directory
 from flask_login import current_user
 
 from app.api import api_bp
@@ -173,3 +175,26 @@ def export_booking_history():
         return jsonify({"message": "Export queue is unavailable. Please try again shortly."}), 503
 
     return jsonify({"message": "CSV export queued. You will receive an email when it is ready."}), 202
+
+
+@api_bp.get("/user/exports/latest")
+@api_bp.get("/user/exports/<filename>")
+@role_required("user")
+def download_export(filename=None):
+    """Send one of the logged-in user's CSV exports (the newest one by default).
+
+    Only names like bookings_<my id>_<timestamp>.csv are accepted, so a user can
+    never download someone else's file or reach outside the exports folder.
+    """
+    export_dir = current_app.config["EXPORT_DIR"]
+    pattern = re.compile(rf"^bookings_{current_user.id}_\d{{8}}T\d+Z\.csv$")
+
+    if filename is None:
+        mine = sorted(f for f in os.listdir(export_dir) if pattern.match(f)) if os.path.isdir(export_dir) else []
+        if not mine:
+            error("No export yet. Click 'Export history (CSV)' first.", 404)
+        filename = mine[-1]  # timestamps sort in time order
+    elif not pattern.match(filename) or not os.path.isfile(os.path.join(export_dir, filename)):
+        error("Export not found", 404)
+
+    return send_from_directory(export_dir, filename, as_attachment=True, mimetype="text/csv")

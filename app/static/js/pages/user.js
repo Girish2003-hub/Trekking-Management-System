@@ -19,14 +19,14 @@ export const UserDashboard = {
       try { await api(`/bookings/${b.id}/pay`, { method: "POST" }); store.notify("Payment successful (simulated)"); this.load(); }
       catch (e) { store.notify(e.message, "danger"); }
     },
-    // Calls YOUR Celery-backed endpoint (POST /api/user/export). See README.
+    // Queues the Celery export job (POST /api/user/export); an email is sent when it finishes.
     async exportCsv() {
       this.exporting = true;
       try {
         const res = await api("/user/export", { method: "POST" });
         store.notify(res.message || "Export started. You will be alerted when the CSV is ready.");
       } catch (e) {
-        store.notify(e.status === 404 ? "CSV export job is not implemented yet." : e.message, "warning");
+        store.notify(e.message, "warning");
       }
       this.exporting = false;
     },
@@ -35,8 +35,11 @@ export const UserDashboard = {
     <div class="container py-4">
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h1 class="h3 mb-0">Hello, {{ store.user.name }}</h1>
-        <button class="btn btn-outline-success" :disabled="exporting" @click="exportCsv">
-          {{ exporting ? "Starting export..." : "Export history (CSV)" }}</button>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-success" :disabled="exporting" @click="exportCsv">
+            {{ exporting ? "Starting export..." : "Export history (CSV)" }}</button>
+          <a class="btn btn-outline-secondary" href="/api/user/exports/latest">Download latest CSV</a>
+        </div>
       </div>
       <div v-if="error" class="alert alert-danger">{{ error }}</div>
       <template v-if="d">

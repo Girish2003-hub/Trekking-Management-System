@@ -24,14 +24,5 @@ def health():
 # their routes to api_bp. They are at the bottom to avoid a circular import.
 from app.api import treks, user, staff, admin  # noqa: E402,F401
 
-# ---------------------------------------------------------------------------
-# YOUR PART - authentication (the spec does not allow AI to write this).
-# The Vue frontend (static/js/store.js) expects these JSON endpoints:
-#   POST /api/auth/login     {email, password}        -> 200 {"user": {...}} | 401 {"message"}
-#   POST /api/auth/register  {name, email, password, contact}  -> 201 {"user": {...}}
-#   POST /api/auth/logout                             -> 200
-#   GET  /api/auth/me                                 -> 200 {"user": {...}} | 401
-# "user" should be helpers.user_json(user) so it contains "role".
-# If you use token auth instead of cookies, return {"token": ...} from login and
-# the frontend's api.js already sends it as "Authentication-Token" when present.
-# ---------------------------------------------------------------------------
+# Authentication endpoints (/api/auth/login, register, logout, me) live in
+# app/auth/routes.py on their own blueprint and use Flask-Login sessions.

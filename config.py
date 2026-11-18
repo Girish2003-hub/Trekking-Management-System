@@ -33,3 +33,5 @@ class Config:
 
     # Where CSV exports are written.
     EXPORT_DIR = os.path.join(BASE_DIR, "exports")
+    # Used to build the download link in the "export ready" email.
+    APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:5000")

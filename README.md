@@ -88,6 +88,8 @@ Full OpenAPI 3.0 definition: `api.yaml` (open it in https://editor.swagger.io to
 | POST | /api/bookings/{id}/pay | user | Simulated payment |
 | GET | /api/user/dashboard | user | Counts, upcoming bookings, available treks |
 | POST | /api/user/export | user | Queue booking-history CSV export; completion is emailed |
+| GET | /api/user/exports/latest | user | Download own newest CSV export |
+| GET | /api/user/exports/{filename} | user | Download one own CSV export (link in the email) |
 | GET/PUT | /api/user/profile | all | View / edit name and contact |
 | GET | /api/staff/dashboard | staff | Assigned treks + registered count per trek |
 | GET | /api/staff/treks/{id} | staff (assigned) | Trek + participant list |
@@ -119,6 +121,6 @@ celery -A celery_worker.celery worker --loglevel=info --pool=solo
 celery -A celery_worker.celery beat --loglevel=info
 ```
 
-On Windows, `--pool=solo` is required for the worker. CSV files are written to `exports/` and are excluded from Git.
+On Windows, `--pool=solo` is required for the worker. CSV files are written to `exports/` (excluded from Git). Users download them from the dashboard's "Download latest CSV" button or the link in the email; set `APP_BASE_URL` if the app is not on `http://localhost:5000`.
 
 The project brief restricts AI use for some components; review the assignment rules and declare assistance accurately before submission.
