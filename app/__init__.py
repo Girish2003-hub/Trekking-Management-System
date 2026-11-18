@@ -2,8 +2,8 @@ from flask import Flask, abort, jsonify, render_template, request
 from sqlalchemy import inspect, text
 
 from config import Config
-from app.extensions import db, init_redis, login_manager
 from app.models import User
+from app.extensions import db, init_redis, login_manager
 
 
 def create_app():
